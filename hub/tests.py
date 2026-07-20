@@ -11,6 +11,15 @@ from rest_framework.test import APIClient
 from .models import Designer, HubBrief, SiteNode
 
 
+class _MockHttpResponse:
+    def __init__(self, content: bytes = b"solid test"):
+        self.content = content
+        self.status_code = 200
+
+    def raise_for_status(self):
+        return None
+
+
 class HubApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -51,16 +60,18 @@ class HubApiTests(TestCase):
             "screenshots_count": 2,
         }
         headers, raw_body = self._signed_headers(payload)
-        response = self.client.generic(
-            "POST",
-            "/api/v1/briefs",
-            data=raw_body,
-            content_type="application/json",
-            **headers,
-        )
+        with patch("hub.services.requests.get", return_value=_MockHttpResponse(b"solid payload")):
+            response = self.client.generic(
+                "POST",
+                "/api/v1/briefs",
+                data=raw_body,
+                content_type="application/json",
+                **headers,
+            )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], HubBrief.Status.QUEUED)
-        self.assertTrue(HubBrief.objects.filter(site=self.site, local_brief_id=12).exists())
+        brief = HubBrief.objects.get(site=self.site, local_brief_id=12)
+        self.assertTrue(bool(brief.source_stl_file))
 
     def test_create_brief_invalid_signature(self):
         payload = {
@@ -96,13 +107,14 @@ class HubApiTests(TestCase):
             "screenshots_count": 2,
         }
         headers, raw_body = self._signed_headers(create_payload)
-        create_response = self.client.generic(
-            "POST",
-            "/api/v1/briefs",
-            data=raw_body,
-            content_type="application/json",
-            **headers,
-        )
+        with patch("hub.services.requests.get", return_value=_MockHttpResponse()):
+            create_response = self.client.generic(
+                "POST",
+                "/api/v1/briefs",
+                data=raw_body,
+                content_type="application/json",
+                **headers,
+            )
         self.assertEqual(create_response.status_code, 200)
         brief_id = create_response.data["brief_id"]
 
@@ -116,13 +128,14 @@ class HubApiTests(TestCase):
             "site_share_amount": "1530.00",
         }
         headers, raw_body = self._signed_headers(update_payload)
-        update_response = self.client.generic(
-            "POST",
-            f"/api/v1/briefs/{brief_id}",
-            data=raw_body,
-            content_type="application/json",
-            **headers,
-        )
+        with patch("hub.services.requests.get", return_value=_MockHttpResponse()):
+            update_response = self.client.generic(
+                "POST",
+                f"/api/v1/briefs/{brief_id}",
+                data=raw_body,
+                content_type="application/json",
+                **headers,
+            )
         self.assertEqual(update_response.status_code, 200)
         brief = HubBrief.objects.get(public_id=brief_id)
         self.assertEqual(brief.model_url, "https://example.test/source.stl")

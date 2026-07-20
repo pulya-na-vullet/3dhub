@@ -51,6 +51,8 @@ class HubBrief(models.Model):
     designer_share_amount = models.DecimalField(max_digits=12, decimal_places=2)
     site_share_amount = models.DecimalField(max_digits=12, decimal_places=2)
     has_stl = models.BooleanField(default=False)
+    source_stl_file = models.FileField(upload_to="hub/source-stl/", blank=True)
+    stl_sync_error = models.CharField(max_length=255, blank=True)
     screenshots_count = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=32, choices=Status.choices, default=Status.QUEUED)
     designer = models.ForeignKey(

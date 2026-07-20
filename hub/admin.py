@@ -30,7 +30,7 @@ class HubBriefAdmin(admin.ModelAdmin):
     search_fields = ("public_id", "brief_number", "client_ref")
     list_filter = ("status", "site")
     autocomplete_fields = ("designer",)
-    readonly_fields = ("created_at", "updated_at", "done_at")
+    readonly_fields = ("created_at", "updated_at", "done_at", "source_stl_file", "stl_sync_error")
 
 
 @admin.register(HubBriefEvent)

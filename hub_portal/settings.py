@@ -101,6 +101,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+HUB_MAX_STL_SIZE_BYTES = int(os.getenv("HUB_MAX_STL_SIZE_BYTES", str(25 * 1024 * 1024)))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

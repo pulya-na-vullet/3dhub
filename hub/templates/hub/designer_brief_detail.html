@@ -40,6 +40,15 @@
               {% endif %}
             </dd>
 
+            <dt class="col-sm-4">STL в HUB</dt>
+            <dd class="col-sm-8">
+              {% if brief.source_stl_file %}
+                <a href="{{ brief.source_stl_file.url }}" target="_blank" rel="noopener">Скачать файл из HUB</a>
+              {% else %}
+                {{ brief.stl_sync_error|default:"Файл пока не загружен в HUB." }}
+              {% endif %}
+            </dd>
+
             <dt class="col-sm-4">Цена</dt>
             <dd class="col-sm-8">{{ brief.agreed_price }}</dd>
 

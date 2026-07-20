@@ -4,9 +4,13 @@ from secrets import token_hex
 
 import json
 import requests
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
+from django.conf import settings
 from django.utils import timezone
+from urllib.parse import urlparse
+from pathlib import Path
 
 from .models import BotConversationState, Designer, HubBrief, HubBriefEvent
 
@@ -68,6 +72,47 @@ def emit_brief_event(brief: HubBrief, event: str, message: str = "") -> None:
     except requests.RequestException:
         # Keep event in outbox log; delivery can be retried manually/by worker later.
         return
+
+
+def sync_source_stl_file_for_brief(brief: HubBrief) -> None:
+    if not brief.has_stl:
+        if brief.source_stl_file:
+            brief.source_stl_file.delete(save=False)
+            brief.source_stl_file = ""
+            brief.stl_sync_error = ""
+            brief.save(update_fields=["source_stl_file", "stl_sync_error", "updated_at"])
+        return
+
+    if not brief.model_url:
+        brief.stl_sync_error = "STL отмечен, но ссылка на файл не передана из CRM."
+        brief.save(update_fields=["stl_sync_error", "updated_at"])
+        return
+
+    try:
+        response = requests.get(brief.model_url, timeout=8)
+        response.raise_for_status()
+    except requests.RequestException:
+        brief.stl_sync_error = "Не удалось скачать STL по ссылке из CRM."
+        brief.save(update_fields=["stl_sync_error", "updated_at"])
+        return
+
+    file_bytes = response.content or b""
+    max_bytes = int(getattr(settings, "HUB_MAX_STL_SIZE_BYTES", 25 * 1024 * 1024))
+    if not file_bytes:
+        brief.stl_sync_error = "CRM вернула пустой STL-файл."
+        brief.save(update_fields=["stl_sync_error", "updated_at"])
+        return
+    if len(file_bytes) > max_bytes:
+        brief.stl_sync_error = "Размер STL превышает лимит HUB."
+        brief.save(update_fields=["stl_sync_error", "updated_at"])
+        return
+
+    parsed = urlparse(brief.model_url)
+    suffix = Path(parsed.path).suffix.lower() or ".stl"
+    filename = f"{brief.public_id}-source{suffix}"
+    brief.source_stl_file.save(filename, ContentFile(file_bytes), save=False)
+    brief.stl_sync_error = ""
+    brief.save(update_fields=["source_stl_file", "stl_sync_error", "updated_at"])
 
 
 def _handle_registration(max_user_id: str, text: str) -> BotReply | None:

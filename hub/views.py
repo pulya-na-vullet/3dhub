@@ -25,7 +25,7 @@ from .serializers import (
     DesignerBriefOutSerializer,
     DesignerLoginInSerializer,
 )
-from .services import emit_brief_event, process_bot_message
+from .services import emit_brief_event, process_bot_message, sync_source_stl_file_for_brief
 
 DESIGNER_SESSION_KEY = "designer_id"
 DESIGNER_WORK_STATUS_CHOICES = [
@@ -141,6 +141,7 @@ class BriefListCreateView(APIView):
                 screenshots_count=data.get("screenshots_count", 0),
                 status=HubBrief.Status.QUEUED,
             )
+            sync_source_stl_file_for_brief(brief)
         else:
             brief.brief_number = data["brief_number"]
             brief.client_ref = data["client_ref"]
@@ -157,6 +158,7 @@ class BriefListCreateView(APIView):
                 brief.screenshots_count = data["screenshots_count"]
             brief.status = HubBrief.Status.QUEUED
             brief.save()
+            sync_source_stl_file_for_brief(brief)
         return Response(
             {"brief_id": brief.public_id, "id": brief.public_id, "status": brief.status},
             status=status.HTTP_200_OK,
@@ -199,6 +201,7 @@ class BriefDetailView(APIView):
         if brief.status == HubBrief.Status.NEEDS_CLARIFICATION:
             brief.status = HubBrief.Status.CLARIFICATION_PROVIDED
         brief.save()
+        sync_source_stl_file_for_brief(brief)
         return Response(BriefOutSerializer(brief).data, status=status.HTTP_200_OK)
 
 
