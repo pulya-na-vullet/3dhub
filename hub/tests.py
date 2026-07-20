@@ -1,0 +1,130 @@
+import hashlib
+import hmac
+import json
+import time
+
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from .models import Designer, HubBrief, SiteNode
+
+
+class HubApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteNode.objects.create(
+            site_id="site-1",
+            name="Workshop 1",
+            callback_base_url="https://example.test",
+            site_token="token-123",
+            site_secret="secret-456",
+        )
+
+    def _signed_headers(self, body: dict):
+        timestamp = str(int(time.time()))
+        raw_body = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+        signature = hmac.new(
+            self.site.site_secret.encode("utf-8"),
+            f"{timestamp}\n{raw_body}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return {
+            "HTTP_AUTHORIZATION": f"Bearer {self.site.site_token}",
+            "HTTP_X_SITE_ID": self.site.site_id,
+            "HTTP_X_TIMESTAMP": timestamp,
+            "HTTP_X_SIGNATURE": signature,
+        }, raw_body
+
+    def test_create_brief_with_hmac(self):
+        payload = {
+            "local_brief_id": 12,
+            "brief_number": "3D-000001",
+            "client_ref": "5",
+            "model_url": "https://example.test/model",
+            "description": "ТЗ",
+            "agreed_price": "5000.00",
+            "designer_share_amount": "3500.00",
+            "site_share_amount": "1500.00",
+            "has_stl": True,
+            "screenshots_count": 2,
+        }
+        headers, raw_body = self._signed_headers(payload)
+        response = self.client.generic(
+            "POST",
+            "/api/v1/briefs",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], HubBrief.Status.QUEUED)
+        self.assertTrue(HubBrief.objects.filter(site=self.site, local_brief_id=12).exists())
+
+    def test_create_brief_invalid_signature(self):
+        payload = {
+            "local_brief_id": 12,
+            "brief_number": "3D-000001",
+            "client_ref": "5",
+            "agreed_price": "5000.00",
+            "designer_share_amount": "3500.00",
+            "site_share_amount": "1500.00",
+        }
+        headers, raw_body = self._signed_headers(payload)
+        headers["HTTP_X_SIGNATURE"] = "bad-signature"
+        response = self.client.generic(
+            "POST",
+            "/api/v1/briefs",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(response.status_code, 401)
+
+
+class MaxBotWorkflowTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteNode.objects.create(
+            site_id="site-1",
+            name="Workshop 1",
+            callback_base_url="https://example.test",
+            site_token="token-123",
+            site_secret="secret-456",
+        )
+        self.brief = HubBrief.objects.create(
+            public_id="brief-1",
+            site=self.site,
+            local_brief_id=88,
+            brief_number="3D-000088",
+            client_ref="cl-88",
+            agreed_price="4000.00",
+            designer_share_amount="2800.00",
+            site_share_amount="1200.00",
+            status=HubBrief.Status.QUEUED,
+        )
+
+    def _send_bot(self, text: str, user_id: str = "max-1") -> str:
+        response = self.client.post(
+            "/api/v1/max/webhook",
+            {"user_id": user_id, "text": text},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data["reply"]
+
+    def test_designer_registration_and_assign(self):
+        self.assertIn("Введите ФИО", self._send_bot("Регистрация: Дизайнер"))
+        self.assertIn("телефон СБП", self._send_bot("Иван Иванов"))
+        self.assertIn("Опишите ваш опыт", self._send_bot("+79991112233"))
+        self.assertIn("ссылку на портфолио", self._send_bot("2 года CAD"))
+        self.assertIn("Регистрация завершена", self._send_bot("https://portfolio.example"))
+
+        self.assertTrue(Designer.objects.filter(max_user_id="max-1").exists())
+        queue_reply = self._send_bot("Очередь")
+        self.assertIn("brief-1", queue_reply)
+
+        take_reply = self._send_bot("Беру brief-1 2 дня")
+        self.assertIn("назначена", take_reply.lower())
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
+        self.assertEqual(self.brief.designer.max_user_id, "max-1")
