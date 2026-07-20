@@ -1,12 +1,15 @@
 import uuid
 from functools import wraps
+from pathlib import Path
 
+from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -219,6 +222,40 @@ class BriefMessageView(APIView):
         brief.status = HubBrief.Status.CLARIFICATION_PROVIDED
         brief.save(update_fields=["last_message", "status", "updated_at"])
         return Response({"status": "accepted"}, status=status.HTTP_200_OK)
+
+
+class BriefSourceStlUploadView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, brief_id: str):
+        try:
+            site = authenticate_site_request(request)
+        except SiteAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        brief = get_object_or_404(HubBrief, public_id=brief_id, site=site)
+        source_file = request.FILES.get("file")
+        if source_file is None:
+            return Response({"detail": "file is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_size = int(getattr(settings, "HUB_MAX_STL_SIZE_BYTES", 25 * 1024 * 1024))
+        if source_file.size > max_size:
+            return Response({"detail": "file is too large"}, status=status.HTTP_400_BAD_REQUEST)
+
+        suffix = Path(source_file.name).suffix.lower() or ".stl"
+        filename = f"{brief.public_id}-source{suffix}"
+        brief.source_stl_file.save(filename, source_file, save=False)
+        brief.has_stl = True
+        brief.stl_sync_error = ""
+        brief.save(update_fields=["source_stl_file", "has_stl", "stl_sync_error", "updated_at"])
+        return Response(
+            {
+                "status": "uploaded",
+                "brief_id": brief.public_id,
+                "filename": Path(brief.source_stl_file.name).name,
+                "size": source_file.size,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class MaxWebhookView(APIView):

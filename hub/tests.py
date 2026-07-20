@@ -4,6 +4,8 @@ import json
 import time
 from unittest.mock import patch
 from django.contrib.auth.hashers import make_password
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test.client import encode_multipart
 
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -45,6 +47,20 @@ class HubApiTests(TestCase):
             "HTTP_X_TIMESTAMP": timestamp,
             "HTTP_X_SIGNATURE": signature,
         }, raw_body
+
+    def _signed_headers_raw(self, raw_body: bytes):
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            self.site.site_secret.encode("utf-8"),
+            f"{timestamp}\n".encode("utf-8") + raw_body,
+            hashlib.sha256,
+        ).hexdigest()
+        return {
+            "HTTP_AUTHORIZATION": f"Bearer {self.site.site_token}",
+            "HTTP_X_SITE_ID": self.site.site_id,
+            "HTTP_X_TIMESTAMP": timestamp,
+            "HTTP_X_SIGNATURE": signature,
+        }
 
     def test_create_brief_with_hmac(self):
         payload = {
@@ -139,6 +155,47 @@ class HubApiTests(TestCase):
         self.assertEqual(update_response.status_code, 200)
         brief = HubBrief.objects.get(public_id=brief_id)
         self.assertEqual(brief.model_url, "https://example.test/source.stl")
+
+    def test_upload_source_stl_multipart(self):
+        create_payload = {
+            "local_brief_id": 31,
+            "brief_number": "3D-000031",
+            "client_ref": "31",
+            "description": "Тест STL upload",
+            "agreed_price": "5000.00",
+            "designer_share_amount": "3500.00",
+            "site_share_amount": "1500.00",
+        }
+        headers, raw_body = self._signed_headers(create_payload)
+        create_response = self.client.generic(
+            "POST",
+            "/api/v1/briefs",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(create_response.status_code, 200)
+        brief_id = create_response.data["brief_id"]
+
+        boundary = "BoUnDaRyStRiNg"
+        body = encode_multipart(
+            boundary,
+            {
+                "file": SimpleUploadedFile("model.stl", b"solid test-model", content_type="model/stl"),
+            },
+        )
+        upload_headers = self._signed_headers_raw(body)
+        upload_response = self.client.generic(
+            "POST",
+            f"/api/v1/briefs/{brief_id}/source-stl",
+            data=body,
+            content_type=f"multipart/form-data; boundary={boundary}",
+            **upload_headers,
+        )
+        self.assertEqual(upload_response.status_code, 200)
+        brief = HubBrief.objects.get(public_id=brief_id)
+        self.assertTrue(bool(brief.source_stl_file))
+        self.assertTrue(brief.has_stl)
 
 
 class MaxBotWorkflowTests(TestCase):

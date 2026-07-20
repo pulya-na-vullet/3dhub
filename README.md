@@ -67,4 +67,15 @@ python manage.py runserver
 
 1. В админке HUB создать `SiteNode` с `site_id`, `site_token`, `site_secret`.
 2. В CRM прописать те же `site_id/token/secret` и адрес HUB.
-3. Отправлять заявки в `POST /api/v1/briefs` в формате из `openapi-hub.yaml`.
+3. Отправлять заявку в `POST /api/v1/briefs` в формате из `openapi-hub.yaml`.
+4. Если к заявке приложен STL-файл, отдельно загружать бинарный файл в HUB:
+   - `POST /api/v1/briefs/{brief_id}/source-stl`
+   - `Content-Type: multipart/form-data`
+   - поле файла: `file`
+   - те же HMAC-заголовки (`Authorization`, `X-Site-Id`, `X-Timestamp`, `X-Signature`) считаются от сырого multipart body.
+
+Рекомендуемый поток для CRM при больших файлах:
+
+1. Создать/обновить brief (JSON).
+2. Получить `brief_id`.
+3. Отправить STL отдельным multipart запросом на `/source-stl` (stream upload).

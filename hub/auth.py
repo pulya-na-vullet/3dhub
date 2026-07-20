@@ -43,8 +43,7 @@ def authenticate_site_request(request) -> SiteNode:
     if token != site.site_token:
         raise SiteAuthError("Invalid token.")
 
-    raw_body = request.body.decode("utf-8")
-    signed_payload = f"{timestamp}\n{raw_body}".encode("utf-8")
+    signed_payload = f"{timestamp}\n".encode("utf-8") + request.body
     expected_signature = hmac.new(
         key=site.site_secret.encode("utf-8"),
         msg=signed_payload,
