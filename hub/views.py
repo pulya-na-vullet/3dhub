@@ -422,10 +422,13 @@ def designer_brief_update_page(request: HttpRequest, brief_id: str) -> HttpRespo
 def designer_claim_page(request: HttpRequest, brief_id: str) -> HttpResponse:
     if request.method != "POST":
         return redirect("designer-web-queue")
+    next_url = request.POST.get("next", "").strip()
+    if not next_url.startswith("/designer/"):
+        next_url = ""
     eta = request.POST.get("eta", "").strip()
     if not eta:
         messages.error(request, "Укажите срок выполнения.")
-        return redirect("designer-web-queue")
+        return redirect(next_url or "designer-web-queue")
     brief, error = _claim_brief_for_designer(designer=request.designer, brief_id=brief_id, eta=eta)
     if error:
         messages.error(
@@ -434,4 +437,4 @@ def designer_claim_page(request: HttpRequest, brief_id: str) -> HttpResponse:
         )
     else:
         messages.success(request, f"Задача {brief.brief_number} назначена на вас.")
-    return redirect("designer-web-queue")
+    return redirect(next_url or "designer-web-queue")

@@ -74,7 +74,27 @@
             Исполнитель: <strong>{{ brief.designer.full_name|default:"—" }}</strong>
           </p>
 
-          {% if brief.designer_id != designer.id %}
+          {% if brief.status == "queued" %}
+            <div class="alert alert-info">
+              Заявка пока свободна. Вы можете взять ее в работу прямо из этой карточки.
+            </div>
+            <form method="post" action="{% url 'designer-web-claim' brief.public_id %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'designer-web-brief-detail' brief.public_id %}" />
+              <div class="mb-3">
+                <label for="eta_claim" class="form-label">Срок выполнения</label>
+                <input
+                  type="text"
+                  id="eta_claim"
+                  name="eta"
+                  class="form-control"
+                  placeholder="Например, 2 дня"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Взять в работу</button>
+            </form>
+          {% elif brief.designer_id != designer.id %}
             <div class="alert alert-warning mb-0">
               Заявка назначена другому дизайнеру. Вы можете только просматривать данные.
             </div>

@@ -381,6 +381,22 @@ class DesignerBootstrapPortalTests(TestCase):
         self.assertEqual(self.brief.designer, self.designer)
         self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
 
+    def test_claim_directly_from_brief_detail_page(self):
+        self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            response = self.client.post(
+                "/designer/briefs/brief-web-portal/claim",
+                {
+                    "eta": "5 дней",
+                    "next": "/designer/briefs/brief-web-portal",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/designer/briefs/brief-web-portal")
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.designer, self.designer)
+
     def test_assigned_designer_can_update_status_and_artifacts(self):
         self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
         with patch("hub.services.requests.post") as mock_post:
