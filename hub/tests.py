@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import time
+from django.contrib.auth.hashers import make_password
 
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -128,3 +129,83 @@ class MaxBotWorkflowTests(TestCase):
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
         self.assertEqual(self.brief.designer.max_user_id, "max-1")
+
+
+class DesignerWebQueueTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteNode.objects.create(
+            site_id="site-2",
+            name="Workshop 2",
+            callback_base_url="https://example.test",
+            site_token="token-abc",
+            site_secret="secret-def",
+        )
+        self.designer_1 = Designer.objects.create(
+            max_user_id="mx-1",
+            full_name="Анна Дизайнер",
+            sbp_phone="+79990000001",
+            experience_text="3 года",
+            portfolio_url="https://portfolio1.example",
+            web_login="anna",
+            web_password_hash=make_password("pass-anna"),
+        )
+        self.designer_2 = Designer.objects.create(
+            max_user_id="mx-2",
+            full_name="Игорь Дизайнер",
+            sbp_phone="+79990000002",
+            experience_text="2 года",
+            portfolio_url="https://portfolio2.example",
+            web_login="igor",
+            web_password_hash=make_password("pass-igor"),
+        )
+        self.brief = HubBrief.objects.create(
+            public_id="brief-web-1",
+            site=self.site,
+            local_brief_id=55,
+            brief_number="3D-000055",
+            client_ref="client-55",
+            agreed_price="6000.00",
+            designer_share_amount="4200.00",
+            site_share_amount="1800.00",
+            status=HubBrief.Status.QUEUED,
+        )
+
+    def _login(self, login: str, password: str) -> str:
+        response = self.client.post(
+            "/api/v1/designer/auth/login",
+            {"login": login, "password": password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data["token"]
+
+    def test_queue_visible_and_claim_locked(self):
+        token_1 = self._login("anna", "pass-anna")
+        response = self.client.get(
+            "/api/v1/designer/briefs",
+            HTTP_AUTHORIZATION=f"Bearer {token_1}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["status"], HubBrief.Status.QUEUED)
+        self.assertIsNone(response.data["results"][0]["designer_name"])
+
+        claim_response_1 = self.client.post(
+            "/api/v1/designer/briefs/brief-web-1/claim",
+            {"eta": "48 часов"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token_1}",
+        )
+        self.assertEqual(claim_response_1.status_code, 200)
+
+        token_2 = self._login("igor", "pass-igor")
+        claim_response_2 = self.client.post(
+            "/api/v1/designer/briefs/brief-web-1/claim",
+            {"eta": "24 часа"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token_2}",
+        )
+        self.assertEqual(claim_response_2.status_code, 409)
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.designer, self.designer_1)

@@ -1,13 +1,21 @@
 import uuid
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .auth import SiteAuthError, authenticate_site_request
+from .designer_auth import DesignerAuthError, authenticate_designer, create_designer_session
 from .models import HubBrief
-from .serializers import BriefInSerializer, BriefOutSerializer
+from .serializers import (
+    BriefInSerializer,
+    BriefOutSerializer,
+    ClaimBriefInSerializer,
+    DesignerBriefOutSerializer,
+    DesignerLoginInSerializer,
+)
 from .services import process_bot_message
 
 
@@ -120,3 +128,86 @@ class MaxWebhookView(APIView):
             )
         reply = process_bot_message(max_user_id=user_id, text=text)
         return Response({"reply": reply.text}, status=status.HTTP_200_OK)
+
+
+class DesignerLoginView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        serializer = DesignerLoginInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            designer, token = create_designer_session(login=data["login"], password=data["password"])
+        except DesignerAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {
+                "token": token.key,
+                "expires_at": token.expires_at.isoformat(),
+                "designer": {"id": designer.id, "full_name": designer.full_name, "login": designer.web_login},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class DesignerBriefQueueView(APIView):
+    def get(self, request):
+        try:
+            designer = authenticate_designer(request)
+        except DesignerAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+
+        briefs = (
+            HubBrief.objects.select_related("designer", "site")
+            .exclude(status=HubBrief.Status.DRAFT)
+            .exclude(status=HubBrief.Status.CANCELLED)
+            .order_by("-updated_at")
+        )
+        payload = DesignerBriefOutSerializer(briefs, many=True).data
+        return Response(
+            {
+                "viewer": {"id": designer.id, "full_name": designer.full_name},
+                "results": payload,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class DesignerBriefClaimView(APIView):
+    def post(self, request, brief_id: str):
+        try:
+            designer = authenticate_designer(request)
+        except DesignerAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+        serializer = ClaimBriefInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        eta = serializer.validated_data["eta"]
+
+        with transaction.atomic():
+            brief = get_object_or_404(HubBrief.objects.select_for_update(), public_id=brief_id)
+            if brief.status != HubBrief.Status.QUEUED:
+                return Response(
+                    {
+                        "detail": "Эту задачу уже взял другой дизайнер.",
+                        "status": brief.status,
+                        "designer_name": brief.designer.full_name if brief.designer else "",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            brief.status = HubBrief.Status.ASSIGNED
+            brief.designer = designer
+            brief.eta = eta
+            brief.save(update_fields=["status", "designer", "eta", "updated_at"])
+
+        return Response(
+            {
+                "brief_id": brief.public_id,
+                "status": brief.status,
+                "designer_name": designer.full_name,
+                "eta": brief.eta,
+            },
+            status=status.HTTP_200_OK,
+        )

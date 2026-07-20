@@ -20,6 +20,8 @@ class Designer(models.Model):
     sbp_phone = models.CharField(max_length=32)
     experience_text = models.TextField()
     portfolio_url = models.URLField()
+    web_login = models.CharField(max_length=64, unique=True, blank=True)
+    web_password_hash = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
     registered_at = models.DateTimeField(auto_now_add=True)
 
@@ -97,3 +99,11 @@ class BotConversationState(models.Model):
     sbp_phone = models.CharField(max_length=32, blank=True)
     experience_text = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class DesignerSessionToken(models.Model):
+    key = models.CharField(max_length=64, unique=True)
+    designer = models.ForeignKey(Designer, on_delete=models.CASCADE, related_name="session_tokens")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_revoked = models.BooleanField(default=False)

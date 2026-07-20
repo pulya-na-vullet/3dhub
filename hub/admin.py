@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import BotConversationState, Designer, HubBrief, HubBriefEvent, SiteNode
+from .models import (
+    BotConversationState,
+    Designer,
+    DesignerSessionToken,
+    HubBrief,
+    HubBriefEvent,
+    SiteNode,
+)
 
 
 @admin.register(SiteNode)
@@ -12,8 +19,8 @@ class SiteNodeAdmin(admin.ModelAdmin):
 
 @admin.register(Designer)
 class DesignerAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "max_user_id", "sbp_phone", "is_active", "registered_at")
-    search_fields = ("full_name", "max_user_id", "sbp_phone")
+    list_display = ("full_name", "max_user_id", "web_login", "sbp_phone", "is_active", "registered_at")
+    search_fields = ("full_name", "max_user_id", "web_login", "sbp_phone")
     list_filter = ("is_active",)
 
 
@@ -36,3 +43,10 @@ class HubBriefEventAdmin(admin.ModelAdmin):
 class BotConversationStateAdmin(admin.ModelAdmin):
     list_display = ("max_user_id", "state", "updated_at")
     search_fields = ("max_user_id", "full_name", "sbp_phone")
+
+
+@admin.register(DesignerSessionToken)
+class DesignerSessionTokenAdmin(admin.ModelAdmin):
+    list_display = ("designer", "key", "expires_at", "is_revoked", "created_at")
+    search_fields = ("designer__full_name", "designer__max_user_id", "key")
+    list_filter = ("is_revoked",)

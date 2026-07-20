@@ -43,3 +43,33 @@ class BriefCreateOutSerializer(serializers.Serializer):
     brief_id = serializers.CharField()
     id = serializers.CharField()
     status = serializers.ChoiceField(choices=[HubBrief.Status.QUEUED, HubBrief.Status.CLARIFICATION_PROVIDED])
+
+
+class DesignerLoginInSerializer(serializers.Serializer):
+    login = serializers.CharField(max_length=64)
+    password = serializers.CharField(max_length=128)
+
+
+class DesignerBriefOutSerializer(serializers.ModelSerializer):
+    brief_id = serializers.CharField(source="public_id")
+    site_name = serializers.CharField(source="site.name")
+    designer_name = serializers.CharField(source="designer.full_name", allow_null=True)
+
+    class Meta:
+        model = HubBrief
+        fields = [
+            "brief_id",
+            "brief_number",
+            "site_name",
+            "description",
+            "agreed_price",
+            "designer_share_amount",
+            "status",
+            "designer_name",
+            "eta",
+            "updated_at",
+        ]
+
+
+class ClaimBriefInSerializer(serializers.Serializer):
+    eta = serializers.CharField(max_length=128)

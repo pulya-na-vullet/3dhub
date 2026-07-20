@@ -1,7 +1,9 @@
 import uuid
 from dataclasses import dataclass
+from secrets import token_hex
 
 from django.db import transaction
+from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
 from .models import BotConversationState, Designer, HubBrief, HubBriefEvent
@@ -64,6 +66,8 @@ def _handle_registration(max_user_id: str, text: str) -> BotReply | None:
         return BotReply("Пришлите ссылку на портфолио.")
 
     if state.state == BotConversationState.State.WAITING_PORTFOLIO:
+        web_login = max_user_id
+        plain_password = token_hex(4)
         Designer.objects.update_or_create(
             max_user_id=max_user_id,
             defaults={
@@ -71,11 +75,18 @@ def _handle_registration(max_user_id: str, text: str) -> BotReply | None:
                 "sbp_phone": state.sbp_phone,
                 "experience_text": state.experience_text,
                 "portfolio_url": text,
+                "web_login": web_login,
+                "web_password_hash": make_password(plain_password),
                 "is_active": True,
             },
         )
         state.delete()
-        return BotReply("Регистрация завершена. Отправьте 'Очередь', чтобы увидеть доступные задачи.")
+        return BotReply(
+            "Регистрация завершена.\n"
+            f"Веб-логин: {web_login}\n"
+            f"Веб-пароль: {plain_password}\n"
+            "Войдите в портал и откройте очередь задач."
+        )
 
     return BotReply("Неизвестное состояние регистрации. Начните заново: Регистрация: Дизайнер")
 
