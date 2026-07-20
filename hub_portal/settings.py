@@ -109,3 +109,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
 }
+
+# Avoid auth collisions with other local Django projects on same host.
+SESSION_COOKIE_NAME = "hub_sessionid"
+CSRF_COOKIE_NAME = "hub_csrftoken"
