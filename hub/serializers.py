@@ -36,6 +36,9 @@ class BriefOutSerializer(serializers.ModelSerializer):
             "status",
             "eta",
             "last_message",
+            "designer_comment",
+            "final_model_url",
+            "final_screenshots_urls",
         ]
 
 
@@ -67,6 +70,12 @@ class DesignerBriefOutSerializer(serializers.ModelSerializer):
             "status",
             "designer_name",
             "eta",
+            "model_url",
+            "has_stl",
+            "screenshots_count",
+            "final_model_url",
+            "final_screenshots_urls",
+            "designer_comment",
             "updated_at",
         ]
 

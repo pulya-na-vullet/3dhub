@@ -24,7 +24,7 @@
                 <th>Описание</th>
                 <th>Цена</th>
                 <th>Ваша доля</th>
-                <th style="min-width: 260px;">Действие</th>
+                <th style="min-width: 320px;">Действие</th>
               </tr>
             </thead>
             <tbody>
@@ -50,6 +50,11 @@
                       </div>
                       <div class="col-5">
                         <button type="submit" class="btn btn-primary btn-sm w-100">Взять в работу</button>
+                      </div>
+                      <div class="col-12">
+                        <a class="btn btn-outline-secondary btn-sm w-100" href="{% url 'designer-web-brief-detail' brief.public_id %}">
+                          Открыть карточку
+                        </a>
                       </div>
                     </form>
                   </td>
@@ -80,6 +85,7 @@
                 <th>Статус</th>
                 <th>Исполнитель</th>
                 <th>Срок</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -91,6 +97,11 @@
                   <td>{{ brief.get_status_display }}</td>
                   <td>{{ brief.designer.full_name|default:"—" }}</td>
                   <td>{{ brief.eta|default:"—" }}</td>
+                  <td class="text-end">
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'designer-web-brief-detail' brief.public_id %}">
+                      Открыть карточку
+                    </a>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>

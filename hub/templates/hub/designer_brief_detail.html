@@ -1,0 +1,116 @@
+{% extends "hub/base.html" %}
+
+{% block title %}Карточка заявки{% endblock %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h3 mb-0">Заявка {{ brief.brief_number }}</h1>
+      <div class="text-muted">ID: {{ brief.public_id }}</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'designer-web-queue' %}">К очереди</a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white"><strong>Данные из CRM</strong></div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Точка</dt>
+            <dd class="col-sm-8">{{ brief.site.name }} ({{ brief.site.site_id }})</dd>
+
+            <dt class="col-sm-4">Локальный ID</dt>
+            <dd class="col-sm-8">{{ brief.local_brief_id }}</dd>
+
+            <dt class="col-sm-4">Client ref</dt>
+            <dd class="col-sm-8">{{ brief.client_ref }}</dd>
+
+            <dt class="col-sm-4">Описание</dt>
+            <dd class="col-sm-8">{{ brief.description|default:"—" }}</dd>
+
+            <dt class="col-sm-4">Ссылка на исходник</dt>
+            <dd class="col-sm-8">
+              {% if brief.model_url %}
+                <a href="{{ brief.model_url }}" target="_blank" rel="noopener">Открыть</a>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+
+            <dt class="col-sm-4">Цена</dt>
+            <dd class="col-sm-8">{{ brief.agreed_price }}</dd>
+
+            <dt class="col-sm-4">Доля дизайнера</dt>
+            <dd class="col-sm-8">{{ brief.designer_share_amount }}</dd>
+
+            <dt class="col-sm-4">Есть STL</dt>
+            <dd class="col-sm-8">{{ brief.has_stl|yesno:"Да,Нет" }}</dd>
+
+            <dt class="col-sm-4">Кол-во скриншотов от менеджера</dt>
+            <dd class="col-sm-8">{{ brief.screenshots_count }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white"><strong>Работа по заявке</strong></div>
+        <div class="card-body">
+          <p class="mb-2">
+            Статус: <strong>{{ brief.get_status_display }}</strong><br />
+            Исполнитель: <strong>{{ brief.designer.full_name|default:"—" }}</strong>
+          </p>
+
+          {% if brief.designer_id != designer.id %}
+            <div class="alert alert-warning mb-0">
+              Заявка назначена другому дизайнеру. Вы можете только просматривать данные.
+            </div>
+          {% else %}
+            <form method="post" action="{% url 'designer-web-brief-update' brief.public_id %}">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label for="status" class="form-label">Новый статус</label>
+                <select class="form-select" id="status" name="status" required>
+                  {% for value, label in status_options %}
+                    <option value="{{ value }}" {% if brief.status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="designer_comment" class="form-label">Комментарий дизайнера</label>
+                <textarea class="form-control" id="designer_comment" name="designer_comment" rows="4">{{ brief.designer_comment }}</textarea>
+              </div>
+              <div class="mb-3">
+                <label for="final_model_url" class="form-label">Ссылка на финальный файл</label>
+                <input
+                  type="url"
+                  class="form-control"
+                  id="final_model_url"
+                  name="final_model_url"
+                  value="{{ brief.final_model_url }}"
+                  placeholder="https://..."
+                />
+              </div>
+              <div class="mb-3">
+                <label for="final_screenshots_urls" class="form-label">Ссылки на фото/скриншоты (по одной в строке)</label>
+                <textarea
+                  class="form-control"
+                  id="final_screenshots_urls"
+                  name="final_screenshots_urls"
+                  rows="4"
+                  placeholder="https://...\nhttps://..."
+                >{{ brief.final_screenshots_urls }}</textarea>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Сохранить изменения</button>
+              <div class="form-text mt-2">
+                Для статуса «Готово» обязательны финальный файл и хотя бы одна ссылка на фото/скриншот.
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

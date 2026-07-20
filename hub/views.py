@@ -5,6 +5,7 @@ from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,6 +28,12 @@ from .serializers import (
 from .services import process_bot_message
 
 DESIGNER_SESSION_KEY = "designer_id"
+DESIGNER_WORK_STATUS_CHOICES = [
+    HubBrief.Status.ASSIGNED,
+    HubBrief.Status.IN_PROGRESS,
+    HubBrief.Status.NEEDS_CLARIFICATION,
+    HubBrief.Status.DONE,
+]
 
 
 def _claim_brief_for_designer(*, designer, brief_id: str, eta: str):
@@ -43,6 +50,44 @@ def _claim_brief_for_designer(*, designer, brief_id: str, eta: str):
         brief.eta = eta
         brief.save(update_fields=["status", "designer", "eta", "updated_at"])
         return brief, None
+
+
+def _update_brief_work_state(
+    *,
+    brief: HubBrief,
+    designer: Designer,
+    status_value: str,
+    designer_comment: str,
+    final_model_url: str,
+    final_screenshots_urls: str,
+):
+    if brief.designer_id != designer.id:
+        return "Изменять заявку может только назначенный дизайнер."
+    if status_value not in DESIGNER_WORK_STATUS_CHOICES:
+        return "Выбран недопустимый статус."
+    if status_value == HubBrief.Status.DONE:
+        if not final_model_url:
+            return "Для статуса 'Готово' укажите ссылку на финальный файл."
+        if not final_screenshots_urls:
+            return "Для статуса 'Готово' добавьте хотя бы одну ссылку на фото/скриншот."
+
+    brief.status = status_value
+    brief.designer_comment = designer_comment
+    brief.final_model_url = final_model_url
+    brief.final_screenshots_urls = final_screenshots_urls
+    if status_value == HubBrief.Status.DONE:
+        brief.done_at = timezone.now()
+    brief.save(
+        update_fields=[
+            "status",
+            "designer_comment",
+            "final_model_url",
+            "final_screenshots_urls",
+            "done_at",
+            "updated_at",
+        ]
+    )
+    return None
 
 
 def _require_designer_session(view_func):
@@ -278,6 +323,43 @@ def designer_queue_page(request: HttpRequest) -> HttpResponse:
         "taken_briefs": [brief for brief in briefs if brief.status != HubBrief.Status.QUEUED],
     }
     return render(request, "hub/designer_queue.html", context)
+
+
+@_require_designer_session
+def designer_brief_detail_page(request: HttpRequest, brief_id: str) -> HttpResponse:
+    brief = get_object_or_404(HubBrief.objects.select_related("site", "designer"), public_id=brief_id)
+    status_options = [
+        (HubBrief.Status.ASSIGNED, "Назначена"),
+        (HubBrief.Status.IN_PROGRESS, "В работе"),
+        (HubBrief.Status.NEEDS_CLARIFICATION, "Нужно уточнение"),
+        (HubBrief.Status.DONE, "Готово"),
+    ]
+    context = {
+        "designer": request.designer,
+        "brief": brief,
+        "status_options": status_options,
+    }
+    return render(request, "hub/designer_brief_detail.html", context)
+
+
+@_require_designer_session
+def designer_brief_update_page(request: HttpRequest, brief_id: str) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("designer-web-brief-detail", brief_id=brief_id)
+    brief = get_object_or_404(HubBrief, public_id=brief_id)
+    error = _update_brief_work_state(
+        brief=brief,
+        designer=request.designer,
+        status_value=request.POST.get("status", "").strip(),
+        designer_comment=request.POST.get("designer_comment", "").strip(),
+        final_model_url=request.POST.get("final_model_url", "").strip(),
+        final_screenshots_urls=request.POST.get("final_screenshots_urls", "").strip(),
+    )
+    if error:
+        messages.error(request, error)
+    else:
+        messages.success(request, "Заявка обновлена.")
+    return redirect("designer-web-brief-detail", brief_id=brief_id)
 
 
 @_require_designer_session

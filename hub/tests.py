@@ -260,3 +260,42 @@ class DesignerBootstrapPortalTests(TestCase):
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.designer, self.designer)
         self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
+
+    def test_assigned_designer_can_update_status_and_artifacts(self):
+        self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+
+        update = self.client.post(
+            "/designer/briefs/brief-web-portal/update",
+            {
+                "status": HubBrief.Status.DONE,
+                "designer_comment": "Готово, все размеры проверены.",
+                "final_model_url": "https://files.example/final-model.stl",
+                "final_screenshots_urls": "https://files.example/screen-1.png\nhttps://files.example/screen-2.png",
+            },
+        )
+        self.assertEqual(update.status_code, 302)
+
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.status, HubBrief.Status.DONE)
+        self.assertEqual(self.brief.designer_comment, "Готово, все размеры проверены.")
+        self.assertEqual(self.brief.final_model_url, "https://files.example/final-model.stl")
+        self.assertIn("screen-2.png", self.brief.final_screenshots_urls)
+
+    def test_done_status_requires_artifacts(self):
+        self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+
+        update = self.client.post(
+            "/designer/briefs/brief-web-portal/update",
+            {
+                "status": HubBrief.Status.DONE,
+                "designer_comment": "Без файлов",
+                "final_model_url": "",
+                "final_screenshots_urls": "",
+            },
+            follow=True,
+        )
+        self.assertEqual(update.status_code, 200)
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
