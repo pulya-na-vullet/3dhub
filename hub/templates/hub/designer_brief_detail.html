@@ -33,6 +33,8 @@
             <dd class="col-sm-8">
               {% if brief.model_url %}
                 <a href="{{ brief.model_url }}" target="_blank" rel="noopener">Открыть</a>
+              {% elif brief.has_stl %}
+                STL-файл указан в CRM, но ссылка не передана в HUB. Попросите менеджера повторно отправить заявку с доступной ссылкой.
               {% else %}
                 —
               {% endif %}

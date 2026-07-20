@@ -12,8 +12,8 @@ class BriefInSerializer(serializers.Serializer):
     agreed_price = serializers.DecimalField(max_digits=12, decimal_places=2)
     designer_share_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     site_share_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
-    has_stl = serializers.BooleanField(required=False, default=False)
-    screenshots_count = serializers.IntegerField(required=False, min_value=0, default=0)
+    has_stl = serializers.BooleanField(required=False)
+    screenshots_count = serializers.IntegerField(required=False, min_value=0)
 
 
 class BriefOutSerializer(serializers.ModelSerializer):

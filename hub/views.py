@@ -25,7 +25,7 @@ from .serializers import (
     DesignerBriefOutSerializer,
     DesignerLoginInSerializer,
 )
-from .services import process_bot_message
+from .services import emit_brief_event, process_bot_message
 
 DESIGNER_SESSION_KEY = "designer_id"
 DESIGNER_WORK_STATUS_CHOICES = [
@@ -49,6 +49,7 @@ def _claim_brief_for_designer(*, designer, brief_id: str, eta: str):
         brief.designer = designer
         brief.eta = eta
         brief.save(update_fields=["status", "designer", "eta", "updated_at"])
+        emit_brief_event(brief, event="taken_in_work")
         return brief, None
 
 
@@ -87,6 +88,13 @@ def _update_brief_work_state(
             "updated_at",
         ]
     )
+    event_map = {
+        HubBrief.Status.ASSIGNED: "assigned",
+        HubBrief.Status.IN_PROGRESS: "in_progress",
+        HubBrief.Status.NEEDS_CLARIFICATION: "needs_clarification",
+        HubBrief.Status.DONE: "done",
+    }
+    emit_brief_event(brief, event=event_map[status_value], message=designer_comment)
     return None
 
 
@@ -136,13 +144,17 @@ class BriefListCreateView(APIView):
         else:
             brief.brief_number = data["brief_number"]
             brief.client_ref = data["client_ref"]
-            brief.model_url = data.get("model_url", "")
-            brief.description = data.get("description", "")
+            if "model_url" in data:
+                brief.model_url = data["model_url"]
+            if "description" in data:
+                brief.description = data["description"]
             brief.agreed_price = data["agreed_price"]
             brief.designer_share_amount = data["designer_share_amount"]
             brief.site_share_amount = data["site_share_amount"]
-            brief.has_stl = data.get("has_stl", False)
-            brief.screenshots_count = data.get("screenshots_count", 0)
+            if "has_stl" in data:
+                brief.has_stl = data["has_stl"]
+            if "screenshots_count" in data:
+                brief.screenshots_count = data["screenshots_count"]
             brief.status = HubBrief.Status.QUEUED
             brief.save()
         return Response(
@@ -173,13 +185,17 @@ class BriefDetailView(APIView):
         brief.local_brief_id = data["local_brief_id"]
         brief.brief_number = data["brief_number"]
         brief.client_ref = data["client_ref"]
-        brief.model_url = data.get("model_url", "")
-        brief.description = data.get("description", "")
+        if "model_url" in data:
+            brief.model_url = data["model_url"]
+        if "description" in data:
+            brief.description = data["description"]
         brief.agreed_price = data["agreed_price"]
         brief.designer_share_amount = data["designer_share_amount"]
         brief.site_share_amount = data["site_share_amount"]
-        brief.has_stl = data.get("has_stl", False)
-        brief.screenshots_count = data.get("screenshots_count", 0)
+        if "has_stl" in data:
+            brief.has_stl = data["has_stl"]
+        if "screenshots_count" in data:
+            brief.screenshots_count = data["screenshots_count"]
         if brief.status == HubBrief.Status.NEEDS_CLARIFICATION:
             brief.status = HubBrief.Status.CLARIFICATION_PROVIDED
         brief.save()

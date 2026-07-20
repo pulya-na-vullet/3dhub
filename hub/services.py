@@ -2,6 +2,8 @@ import uuid
 from dataclasses import dataclass
 from secrets import token_hex
 
+import json
+import requests
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
@@ -14,7 +16,7 @@ class BotReply:
     text: str
 
 
-def _create_event(brief: HubBrief, event: str, message: str = "") -> None:
+def emit_brief_event(brief: HubBrief, event: str, message: str = "") -> None:
     payload = {
         "event_id": str(uuid.uuid4()),
         "event": event,
@@ -25,13 +27,47 @@ def _create_event(brief: HubBrief, event: str, message: str = "") -> None:
         "eta": brief.eta,
         "message": message,
     }
-    HubBriefEvent.objects.create(
+    event_log = HubBriefEvent.objects.create(
         event_id=payload["event_id"],
         brief=brief,
         event=event,
         payload_json=payload,
         delivered_ok=False,
     )
+    callback = (brief.site.callback_base_url or "").rstrip("/")
+    if not callback:
+        return
+    webhook_url = f"{callback}/hooks/hub/briefs"
+    timestamp = str(int(timezone.now().timestamp()))
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    signature_payload = f"{timestamp}\n{body}".encode("utf-8")
+    try:
+        import hashlib
+        import hmac
+
+        signature = hmac.new(
+            key=brief.site.site_secret.encode("utf-8"),
+            msg=signature_payload,
+            digestmod=hashlib.sha256,
+        ).hexdigest()
+        response = requests.post(
+            webhook_url,
+            data=body.encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {brief.site.site_token}",
+                "X-Site-Id": brief.site.site_id,
+                "X-Timestamp": timestamp,
+                "X-Signature": signature,
+            },
+            timeout=3,
+        )
+        if 200 <= response.status_code < 300:
+            event_log.delivered_ok = True
+            event_log.save(update_fields=["delivered_ok"])
+    except requests.RequestException:
+        # Keep event in outbox log; delivery can be retried manually/by worker later.
+        return
 
 
 def _handle_registration(max_user_id: str, text: str) -> BotReply | None:
@@ -134,7 +170,7 @@ def process_bot_message(max_user_id: str, text: str) -> BotReply:
             brief.designer = designer
             brief.eta = eta
             brief.save(update_fields=["status", "designer", "eta", "updated_at"])
-            _create_event(brief, event="taken_in_work")
+            emit_brief_event(brief, event="taken_in_work")
         return BotReply(f"Задача {brief_id} назначена на вас.")
 
     if text.startswith("Уточнение "):
@@ -151,7 +187,7 @@ def process_bot_message(max_user_id: str, text: str) -> BotReply:
             brief.status = HubBrief.Status.NEEDS_CLARIFICATION
             brief.last_message = message
             brief.save(update_fields=["status", "last_message", "updated_at"])
-            _create_event(brief, event="needs_clarification", message=message)
+            emit_brief_event(brief, event="needs_clarification", message=message)
         return BotReply("Уточнение отправлено менеджеру.")
 
     if text.startswith("Готово "):
@@ -167,7 +203,7 @@ def process_bot_message(max_user_id: str, text: str) -> BotReply:
             brief.status = HubBrief.Status.DONE
             brief.done_at = timezone.now()
             brief.save(update_fields=["status", "done_at", "updated_at"])
-            _create_event(brief, event="done")
+            emit_brief_event(brief, event="done")
         return BotReply(f"Задача {brief_id} отмечена как готовая.")
 
     return BotReply("Команды: Очередь | Беру <brief_id> <срок> | Уточнение <brief_id> <текст> | Готово <brief_id>")

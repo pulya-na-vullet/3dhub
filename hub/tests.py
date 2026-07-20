@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import time
+from unittest.mock import patch
 from django.contrib.auth.hashers import make_password
 
 from django.test import TestCase
@@ -81,6 +82,51 @@ class HubApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_update_keeps_existing_model_url_when_not_provided(self):
+        create_payload = {
+            "local_brief_id": 21,
+            "brief_number": "3D-000021",
+            "client_ref": "11",
+            "model_url": "https://example.test/source.stl",
+            "description": "Исходный вариант",
+            "agreed_price": "5000.00",
+            "designer_share_amount": "3500.00",
+            "site_share_amount": "1500.00",
+            "has_stl": True,
+            "screenshots_count": 2,
+        }
+        headers, raw_body = self._signed_headers(create_payload)
+        create_response = self.client.generic(
+            "POST",
+            "/api/v1/briefs",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(create_response.status_code, 200)
+        brief_id = create_response.data["brief_id"]
+
+        update_payload = {
+            "local_brief_id": 21,
+            "brief_number": "3D-000021",
+            "client_ref": "11",
+            "description": "Обновленное описание",
+            "agreed_price": "5100.00",
+            "designer_share_amount": "3570.00",
+            "site_share_amount": "1530.00",
+        }
+        headers, raw_body = self._signed_headers(update_payload)
+        update_response = self.client.generic(
+            "POST",
+            f"/api/v1/briefs/{brief_id}",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(update_response.status_code, 200)
+        brief = HubBrief.objects.get(public_id=brief_id)
+        self.assertEqual(brief.model_url, "https://example.test/source.stl")
+
 
 class MaxBotWorkflowTests(TestCase):
     def setUp(self):
@@ -124,7 +170,9 @@ class MaxBotWorkflowTests(TestCase):
         queue_reply = self._send_bot("Очередь")
         self.assertIn("brief-1", queue_reply)
 
-        take_reply = self._send_bot("Беру brief-1 2 дня")
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            take_reply = self._send_bot("Беру brief-1 2 дня")
         self.assertIn("назначена", take_reply.lower())
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
@@ -255,7 +303,9 @@ class DesignerBootstrapPortalTests(TestCase):
         self.assertContains(queue, "Свободные задачи")
         self.assertContains(queue, "brief-web-portal")
 
-        claim = self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            claim = self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
         self.assertEqual(claim.status_code, 302)
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.designer, self.designer)
@@ -263,17 +313,21 @@ class DesignerBootstrapPortalTests(TestCase):
 
     def test_assigned_designer_can_update_status_and_artifacts(self):
         self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
-        self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
 
-        update = self.client.post(
-            "/designer/briefs/brief-web-portal/update",
-            {
-                "status": HubBrief.Status.DONE,
-                "designer_comment": "Готово, все размеры проверены.",
-                "final_model_url": "https://files.example/final-model.stl",
-                "final_screenshots_urls": "https://files.example/screen-1.png\nhttps://files.example/screen-2.png",
-            },
-        )
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            update = self.client.post(
+                "/designer/briefs/brief-web-portal/update",
+                {
+                    "status": HubBrief.Status.DONE,
+                    "designer_comment": "Готово, все размеры проверены.",
+                    "final_model_url": "https://files.example/final-model.stl",
+                    "final_screenshots_urls": "https://files.example/screen-1.png\nhttps://files.example/screen-2.png",
+                },
+            )
         self.assertEqual(update.status_code, 302)
 
         self.brief.refresh_from_db()
@@ -284,7 +338,9 @@ class DesignerBootstrapPortalTests(TestCase):
 
     def test_done_status_requires_artifacts(self):
         self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
-        self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
 
         update = self.client.post(
             "/designer/briefs/brief-web-portal/update",
@@ -299,3 +355,22 @@ class DesignerBootstrapPortalTests(TestCase):
         self.assertEqual(update.status_code, 200)
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)
+
+    def test_in_progress_update_sends_webhook_with_comment(self):
+        self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+            self.client.post(
+                "/designer/briefs/brief-web-portal/update",
+                {
+                    "status": HubBrief.Status.IN_PROGRESS,
+                    "designer_comment": "Начал моделирование, ETA 2 дня.",
+                    "final_model_url": "",
+                    "final_screenshots_urls": "",
+                },
+            )
+            self.assertGreaterEqual(mock_post.call_count, 2)
+            last_payload = json.loads(mock_post.call_args.kwargs["data"].decode("utf-8"))
+            self.assertEqual(last_payload["event"], "in_progress")
+            self.assertEqual(last_payload["message"], "Начал моделирование, ETA 2 дня.")
