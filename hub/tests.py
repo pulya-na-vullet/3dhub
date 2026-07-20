@@ -209,3 +209,54 @@ class DesignerWebQueueTests(TestCase):
         self.assertEqual(claim_response_2.status_code, 409)
         self.brief.refresh_from_db()
         self.assertEqual(self.brief.designer, self.designer_1)
+
+
+class DesignerBootstrapPortalTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteNode.objects.create(
+            site_id="site-3",
+            name="Workshop 3",
+            callback_base_url="https://example.test",
+            site_token="token-z",
+            site_secret="secret-z",
+        )
+        self.designer = Designer.objects.create(
+            max_user_id="mx-3",
+            full_name="Павел Дизайнер",
+            sbp_phone="+79990000003",
+            experience_text="4 года",
+            portfolio_url="https://portfolio3.example",
+            web_login="pavel",
+            web_password_hash=make_password("pass-pavel"),
+        )
+        self.brief = HubBrief.objects.create(
+            public_id="brief-web-portal",
+            site=self.site,
+            local_brief_id=56,
+            brief_number="3D-000056",
+            client_ref="client-56",
+            agreed_price="6500.00",
+            designer_share_amount="4550.00",
+            site_share_amount="1950.00",
+            status=HubBrief.Status.QUEUED,
+        )
+
+    def test_login_and_claim_via_bootstrap_pages(self):
+        login_get = self.client.get("/designer/login")
+        self.assertEqual(login_get.status_code, 200)
+
+        login_post = self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        self.assertEqual(login_post.status_code, 302)
+        self.assertEqual(login_post.url, "/designer/queue")
+
+        queue = self.client.get("/designer/queue")
+        self.assertEqual(queue.status_code, 200)
+        self.assertContains(queue, "Свободные задачи")
+        self.assertContains(queue, "brief-web-portal")
+
+        claim = self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+        self.assertEqual(claim.status_code, 302)
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.designer, self.designer)
+        self.assertEqual(self.brief.status, HubBrief.Status.ASSIGNED)

@@ -11,7 +11,7 @@ class DesignerAuthError(Exception):
     """Raised when designer auth fails."""
 
 
-def create_designer_session(login: str, password: str) -> tuple[Designer, DesignerSessionToken]:
+def authenticate_designer_credentials(login: str, password: str) -> Designer:
     try:
         designer = Designer.objects.get(web_login=login, is_active=True)
     except Designer.DoesNotExist as exc:
@@ -19,6 +19,12 @@ def create_designer_session(login: str, password: str) -> tuple[Designer, Design
 
     if not check_password(password, designer.web_password_hash):
         raise DesignerAuthError("Неверный логин или пароль.")
+
+    return designer
+
+
+def create_designer_session(login: str, password: str) -> tuple[Designer, DesignerSessionToken]:
+    designer = authenticate_designer_credentials(login=login, password=password)
 
     token = DesignerSessionToken.objects.create(
         key=token_urlsafe(32),

@@ -1,0 +1,104 @@
+{% extends "hub/base.html" %}
+
+{% block title %}Очередь задач{% endblock %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Очередь задач</h1>
+    <a href="{% url 'designer-web-queue' %}" class="btn btn-outline-secondary btn-sm">Обновить</a>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+      <strong>Свободные задачи ({{ queued_briefs|length }})</strong>
+    </div>
+    <div class="card-body p-0">
+      {% if queued_briefs %}
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Номер</th>
+                <th>Точка</th>
+                <th>Описание</th>
+                <th>Цена</th>
+                <th>Ваша доля</th>
+                <th style="min-width: 260px;">Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for brief in queued_briefs %}
+                <tr>
+                  <td>{{ brief.public_id }}</td>
+                  <td>{{ brief.brief_number }}</td>
+                  <td>{{ brief.site.name }}</td>
+                  <td>{{ brief.description|default:"—"|truncatechars:120 }}</td>
+                  <td>{{ brief.agreed_price }}</td>
+                  <td>{{ brief.designer_share_amount }}</td>
+                  <td>
+                    <form class="row g-2" method="post" action="{% url 'designer-web-claim' brief.public_id %}">
+                      {% csrf_token %}
+                      <div class="col-7">
+                        <input
+                          type="text"
+                          class="form-control form-control-sm"
+                          name="eta"
+                          placeholder="Срок, например 2 дня"
+                          required
+                        />
+                      </div>
+                      <div class="col-5">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">Взять в работу</button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-3 text-muted">Свободных задач сейчас нет.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white">
+      <strong>Уже взятые задачи ({{ taken_briefs|length }})</strong>
+    </div>
+    <div class="card-body p-0">
+      {% if taken_briefs %}
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Номер</th>
+                <th>Точка</th>
+                <th>Статус</th>
+                <th>Исполнитель</th>
+                <th>Срок</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for brief in taken_briefs %}
+                <tr>
+                  <td>{{ brief.public_id }}</td>
+                  <td>{{ brief.brief_number }}</td>
+                  <td>{{ brief.site.name }}</td>
+                  <td>{{ brief.get_status_display }}</td>
+                  <td>{{ brief.designer.full_name|default:"—" }}</td>
+                  <td>{{ brief.eta|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-3 text-muted">Пока нет задач в работе.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
