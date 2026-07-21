@@ -10,7 +10,8 @@ from django.test.client import encode_multipart
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import Designer, HubBrief, SiteNode
+from .models import Designer, DesignerRating, HubAdminUser, HubBrief, SiteNode
+from .portal_admin import ADMIN_SESSION_KEY
 
 
 class _MockHttpResponse:
@@ -488,3 +489,182 @@ class DesignerBootstrapPortalTests(TestCase):
             last_payload = json.loads(mock_post.call_args.kwargs["data"].decode("utf-8"))
             self.assertEqual(last_payload["event"], "in_progress")
             self.assertEqual(last_payload["message"], "Начал моделирование, ETA 2 дня.")
+
+
+class DesignerRatingApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.site = SiteNode.objects.create(
+            site_id="site-rate",
+            name="Workshop Rate",
+            callback_base_url="https://example.test",
+            site_token="token-rate",
+            site_secret="secret-rate",
+        )
+        self.designer = Designer.objects.create(
+            max_user_id="d-rate-1",
+            full_name="Рейтинг Дизайнер",
+            sbp_phone="79001112233",
+            experience_text="exp",
+            portfolio_url="https://example.test/p",
+            web_login="rater",
+            web_password_hash=make_password("pass"),
+            is_active=True,
+        )
+        self.brief = HubBrief.objects.create(
+            public_id="brief-rate-1",
+            site=self.site,
+            local_brief_id=77,
+            brief_number="3D-000077",
+            client_ref="c-77",
+            agreed_price="5000.00",
+            designer_share_amount="3500.00",
+            site_share_amount="1500.00",
+            status=HubBrief.Status.DONE,
+            designer=self.designer,
+        )
+
+    def _signed(self, body: dict):
+        timestamp = str(int(time.time()))
+        raw_body = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+        signature = hmac.new(
+            self.site.site_secret.encode("utf-8"),
+            f"{timestamp}\n{raw_body}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return {
+            "HTTP_AUTHORIZATION": f"Bearer {self.site.site_token}",
+            "HTTP_X_SITE_ID": self.site.site_id,
+            "HTTP_X_TIMESTAMP": timestamp,
+            "HTTP_X_SIGNATURE": signature,
+        }, raw_body
+
+    def test_create_rating_updates_designer_avg(self):
+        payload = {
+            "event_id": "rating-77-1",
+            "score": 5,
+            "comment": "Отлично",
+            "rated_by": "Менеджер",
+            "local_brief_id": 77,
+        }
+        headers, raw_body = self._signed(payload)
+        response = self.client.generic(
+            "POST",
+            "/api/v1/briefs/brief-rate-1/ratings",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "created")
+        self.assertEqual(response.data["score"], 5)
+        self.designer.refresh_from_db()
+        self.assertEqual(self.designer.ratings_count, 1)
+        self.assertEqual(str(self.designer.avg_rating), "5.00")
+
+        headers, raw_body = self._signed(payload)
+        dup = self.client.generic(
+            "POST",
+            "/api/v1/briefs/brief-rate-1/ratings",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(dup.status_code, 200)
+        self.assertEqual(dup.data["status"], "duplicate")
+        self.assertEqual(DesignerRating.objects.count(), 1)
+
+    def test_rating_requires_assigned_designer(self):
+        self.brief.designer = None
+        self.brief.save(update_fields=["designer"])
+        payload = {"event_id": "rating-orphan", "score": 4}
+        headers, raw_body = self._signed(payload)
+        response = self.client.generic(
+            "POST",
+            "/api/v1/briefs/brief-rate-1/ratings",
+            data=raw_body,
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class PortalAdminWebTests(TestCase):
+    def setUp(self):
+        self.admin = HubAdminUser.objects.create(
+            full_name="Админ",
+            web_login="padmin",
+            web_password_hash=make_password("admin-pass"),
+            is_active=True,
+        )
+        self.site = SiteNode.objects.create(
+            site_id="site-admin",
+            name="Workshop Admin",
+            callback_base_url="https://example.test",
+            site_token="t",
+            site_secret="s",
+        )
+        self.designer = Designer.objects.create(
+            max_user_id="d-admin-1",
+            full_name="Удаляемый",
+            sbp_phone="7900",
+            experience_text="e",
+            portfolio_url="https://example.test/p",
+            web_login="victim",
+            web_password_hash=make_password("x"),
+            is_active=True,
+        )
+        self.brief = HubBrief.objects.create(
+            public_id="brief-admin-del",
+            site=self.site,
+            local_brief_id=9,
+            brief_number="3D-9",
+            client_ref="c9",
+            agreed_price="1000.00",
+            designer_share_amount="700.00",
+            site_share_amount="300.00",
+            status=HubBrief.Status.QUEUED,
+        )
+
+    def _login(self):
+        response = self.client.post(
+            "/portal-admin/login",
+            {"login": "padmin", "password": "admin-pass"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.session.get(ADMIN_SESSION_KEY), self.admin.id)
+
+    def test_admin_dashboard_and_issue_account(self):
+        self._login()
+        dash = self.client.get("/portal-admin/")
+        self.assertEqual(dash.status_code, 200)
+        self.assertContains(dash, "Рейтинг дизайнеров")
+
+        created = self.client.post(
+            "/portal-admin/designers/create",
+            {
+                "full_name": "Новый Дизайнер",
+                "web_login": "newbie",
+                "password": "secret12",
+                "sbp_phone": "79005554433",
+            },
+        )
+        self.assertEqual(created.status_code, 302)
+        self.assertTrue(Designer.objects.filter(web_login="newbie").exists())
+
+    def test_admin_deactivate_and_delete_user(self):
+        self._login()
+        toggle = self.client.post(f"/portal-admin/designers/{self.designer.id}/toggle")
+        self.assertEqual(toggle.status_code, 302)
+        self.designer.refresh_from_db()
+        self.assertFalse(self.designer.is_active)
+
+        delete = self.client.post(f"/portal-admin/designers/{self.designer.id}/delete")
+        self.assertEqual(delete.status_code, 302)
+        self.assertFalse(Designer.objects.filter(id=self.designer.id).exists())
+
+    def test_admin_delete_brief(self):
+        self._login()
+        delete = self.client.post(f"/portal-admin/briefs/{self.brief.public_id}/delete")
+        self.assertEqual(delete.status_code, 302)
+        self.assertFalse(HubBrief.objects.filter(public_id="brief-admin-del").exists())

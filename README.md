@@ -28,6 +28,14 @@ MVP-портал для сети CRM-точек и дизайнеров 3D-мо�
   - `GET /api/v1/designer/briefs` (общая очередь + уже взятые задачи + кто исполнитель)
   - `POST /api/v1/designer/briefs/{brief_id}/claim` (атомарное назначение, второй дизайнер получит `409`)
 - Django admin для управления точками, дизайнерами, заявками и событиями.
+- Роль **администратора портала** (отдельно от Django `/admin/`):
+  - `/portal-admin/login` — вход,
+  - панель рейтинга дизайнеров,
+  - выдача / деактивация / удаление УЗ дизайнеров,
+  - удаление заказов (брифов).
+- Рейтинг дизайнера приходит из CRM после выполнения 3D-заказа:
+  - `POST /api/v1/briefs/{brief_id}/ratings` (HMAC SITE),
+  - контракт для доработки CRM: [`docs/CRM_RATING_CONTRACT.md`](docs/CRM_RATING_CONTRACT.md).
 - Веб-кабинет дизайнеров на Django templates + Bootstrap 5:
   - `/designer/login` — вход по кредам от бота,
   - `/designer/queue` — общая очередь для всех дизайнеров,
@@ -45,13 +53,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py create_portal_admin --login admin --password 'change-me' --full-name 'Админ HUB'
 python manage.py runserver
 ```
 
 Открыть в браузере:
 
 - `http://127.0.0.1:8000/designer/login` — кабинет дизайнера
-- `http://127.0.0.1:8000/admin/` — админка
+- `http://127.0.0.1:8000/portal-admin/login` — админ-панель портала (рейтинг, УЗ, заказы)
+- `http://127.0.0.1:8000/admin/` — Django admin
 
 ## Настройки
 
@@ -79,3 +89,6 @@ python manage.py runserver
 1. Создать/обновить brief (JSON).
 2. Получить `brief_id`.
 3. Отправить STL отдельным multipart запросом на `/source-stl` (stream upload).
+4. После выполнения 3D-работы менеджером CRM — отправить оценку дизайнера:
+   - `POST /api/v1/briefs/{brief_id}/ratings`
+   - см. полный контракт в `docs/CRM_RATING_CONTRACT.md` (готово для задачи в CRM-тред).

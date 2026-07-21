@@ -1,0 +1,51 @@
+{% extends "hub/base.html" %}
+{% block title %}Заказы — HUB Admin{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Заказы (брифы)</h1>
+    <p class="text-muted mb-0">Администратор может удалять заказы пользователей.</p>
+  </div>
+  <div class="btn-group">
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-dashboard' %}">Рейтинг</a>
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-designers' %}">УЗ дизайнеров</a>
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-briefs' %}">Заказы</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'portal-admin-logout' %}">Выйти</a>
+  </div>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm mb-0 align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Brief</th>
+        <th>Номер</th>
+        <th>Клиент</th>
+        <th>Статус</th>
+        <th>Исполнитель</th>
+        <th>Точка</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in briefs %}
+      <tr>
+        <td><code>{{ b.public_id|truncatechars:12 }}</code></td>
+        <td>{{ b.brief_number }}</td>
+        <td>{{ b.client_ref }}</td>
+        <td>{{ b.get_status_display }}</td>
+        <td>{% if b.designer %}{{ b.designer.full_name }}{% else %}—{% endif %}</td>
+        <td>{{ b.site.site_id }}</td>
+        <td class="text-end">
+          <form method="post" action="{% url 'portal-admin-brief-delete' b.public_id %}" onsubmit="return confirm('Удалить заказ {{ b.brief_number }}?');">{% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger" type="submit">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="text-muted p-3">Нет заказов.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

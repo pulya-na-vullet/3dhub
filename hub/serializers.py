@@ -50,6 +50,14 @@ class BriefCreateOutSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[HubBrief.Status.QUEUED, HubBrief.Status.CLARIFICATION_PROVIDED])
 
 
+class BriefRatingInSerializer(serializers.Serializer):
+    event_id = serializers.CharField(max_length=64)
+    score = serializers.IntegerField(min_value=1, max_value=5)
+    comment = serializers.CharField(required=False, allow_blank=True, default="")
+    rated_by = serializers.CharField(required=False, allow_blank=True, max_length=255, default="")
+    local_brief_id = serializers.IntegerField(required=False, min_value=1)
+
+
 class DesignerLoginInSerializer(serializers.Serializer):
     login = serializers.CharField(max_length=64)
     password = serializers.CharField(max_length=128)

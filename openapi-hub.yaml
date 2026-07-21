@@ -79,6 +79,29 @@ paths:
       responses:
         "200":
           description: Accepted
+  /api/v1/briefs/{brief_id}/ratings:
+    post:
+      summary: Rate designer after completed 3D work (CRM manager)
+      description: |
+        Idempotent by event_id. Updates designer avg_rating / ratings_count on HUB.
+        Full contract: docs/CRM_RATING_CONTRACT.md
+      parameters:
+        - $ref: "#/components/parameters/BriefId"
+      security:
+        - SiteHmac: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BriefRatingIn"
+      responses:
+        "200":
+          description: Created or duplicate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BriefRatingOut"
 components:
   securitySchemes:
     SiteHmac:
@@ -153,6 +176,47 @@ components:
                 - clarification_provided
                 - done
                 - cancelled
+    BriefRatingIn:
+      type: object
+      required: [event_id, score]
+      properties:
+        event_id:
+          type: string
+          maxLength: 64
+          description: Unique idempotency key from CRM
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        rated_by:
+          type: string
+          description: CRM manager name/login
+        local_brief_id:
+          type: integer
+          description: Optional; must match HUB brief if provided
+    BriefRatingOut:
+      type: object
+      required: [status, event_id, brief_id, score]
+      properties:
+        status:
+          type: string
+          enum: [created, duplicate]
+        event_id:
+          type: string
+        brief_id:
+          type: string
+        designer_id:
+          type: integer
+        designer_name:
+          type: string
+        score:
+          type: integer
+        avg_rating:
+          type: string
+        ratings_count:
+          type: integer
     HubToSiteWebhook:
       type: object
       description: POST to SITE /hooks/hub/briefs

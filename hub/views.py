@@ -21,9 +21,11 @@ from .designer_auth import (
     create_designer_session,
 )
 from .models import Designer, HubBrief
+from .portal_admin import upsert_designer_rating
 from .serializers import (
     BriefInSerializer,
     BriefOutSerializer,
+    BriefRatingInSerializer,
     ClaimBriefInSerializer,
     DesignerBriefOutSerializer,
     DesignerLoginInSerializer,
@@ -255,6 +257,55 @@ class BriefSourceStlUploadView(APIView):
                 "brief_id": brief.public_id,
                 "filename": Path(brief.source_stl_file.name).name,
                 "size": source_file.size,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BriefRatingView(APIView):
+    """CRM manager rates designer after 3D brief is done. Idempotent by event_id."""
+
+    def post(self, request, brief_id: str):
+        try:
+            site = authenticate_site_request(request)
+        except SiteAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+
+        brief = get_object_or_404(HubBrief, public_id=brief_id, site=site)
+        serializer = BriefRatingInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        local_brief_id = data.get("local_brief_id")
+        if local_brief_id is not None and local_brief_id != brief.local_brief_id:
+            return Response(
+                {"detail": "local_brief_id does not match brief"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            rating, created = upsert_designer_rating(
+                site=site,
+                brief=brief,
+                event_id=data["event_id"],
+                score=data["score"],
+                comment=data.get("comment", ""),
+                rated_by=data.get("rated_by", ""),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        designer = rating.designer
+        return Response(
+            {
+                "status": "created" if created else "duplicate",
+                "event_id": rating.event_id,
+                "brief_id": brief.public_id,
+                "designer_id": designer.id,
+                "designer_name": designer.full_name,
+                "score": rating.score,
+                "avg_rating": str(designer.avg_rating),
+                "ratings_count": designer.ratings_count,
             },
             status=status.HTTP_200_OK,
         )

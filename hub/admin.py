@@ -3,7 +3,9 @@ from django.contrib import admin
 from .models import (
     BotConversationState,
     Designer,
+    DesignerRating,
     DesignerSessionToken,
+    HubAdminUser,
     HubBrief,
     HubBriefEvent,
     SiteNode,
@@ -19,8 +21,32 @@ class SiteNodeAdmin(admin.ModelAdmin):
 
 @admin.register(Designer)
 class DesignerAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "max_user_id", "web_login", "sbp_phone", "is_active", "registered_at")
+    list_display = (
+        "full_name",
+        "max_user_id",
+        "web_login",
+        "avg_rating",
+        "ratings_count",
+        "sbp_phone",
+        "is_active",
+        "registered_at",
+    )
     search_fields = ("full_name", "max_user_id", "web_login", "sbp_phone")
+    list_filter = ("is_active",)
+
+
+@admin.register(HubAdminUser)
+class HubAdminUserAdmin(admin.ModelAdmin):
+    list_display = (
+        "full_name",
+        "web_login",
+        "is_active",
+        "can_manage_users",
+        "can_manage_briefs",
+        "can_view_ratings",
+        "created_at",
+    )
+    search_fields = ("full_name", "web_login")
     list_filter = ("is_active",)
 
 
@@ -39,6 +65,14 @@ class HubBriefAdmin(admin.ModelAdmin):
         "final_model_file",
         "final_screenshots_archive",
     )
+
+
+@admin.register(DesignerRating)
+class DesignerRatingAdmin(admin.ModelAdmin):
+    list_display = ("event_id", "designer", "score", "brief", "site", "rated_by", "created_at")
+    search_fields = ("event_id", "designer__full_name", "brief__public_id", "rated_by")
+    list_filter = ("score", "site")
+    autocomplete_fields = ("designer", "brief", "site")
 
 
 @admin.register(HubBriefEvent)

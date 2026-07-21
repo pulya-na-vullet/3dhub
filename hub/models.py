@@ -23,10 +23,28 @@ class Designer(models.Model):
     web_login = models.CharField(max_length=64, unique=True, blank=True)
     web_password_hash = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
+    avg_rating = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    ratings_count = models.PositiveIntegerField(default=0)
     registered_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return self.full_name
+
+
+class HubAdminUser(models.Model):
+    """Portal administrator (role policy), separate from Django staff/superuser."""
+
+    full_name = models.CharField(max_length=255)
+    web_login = models.CharField(max_length=64, unique=True)
+    web_password_hash = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    can_manage_users = models.BooleanField(default=True)
+    can_manage_briefs = models.BooleanField(default=True)
+    can_view_ratings = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.full_name} ({self.web_login})"
 
 
 class HubBrief(models.Model):
@@ -82,6 +100,28 @@ class HubBrief(models.Model):
 
     def __str__(self) -> str:
         return f"{self.public_id} ({self.get_status_display()})"
+
+
+class DesignerRating(models.Model):
+    """Rating of a designer for a completed brief, sent by CRM manager."""
+
+    event_id = models.CharField(max_length=64, unique=True)
+    brief = models.ForeignKey(HubBrief, on_delete=models.CASCADE, related_name="ratings")
+    designer = models.ForeignKey(Designer, on_delete=models.CASCADE, related_name="ratings")
+    site = models.ForeignKey(SiteNode, on_delete=models.PROTECT, related_name="ratings")
+    score = models.PositiveSmallIntegerField()
+    comment = models.TextField(blank=True)
+    rated_by = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(score__gte=1, score__lte=5), name="rating_score_1_5"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.designer} = {self.score}/5 ({self.brief.public_id})"
 
 
 class HubBriefEvent(models.Model):
