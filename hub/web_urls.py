@@ -16,10 +16,10 @@ urlpatterns = [
     path("designer/logout", designer_logout, name="designer-web-logout"),
     path("designer/queue", designer_queue_page, name="designer-web-queue"),
     path("designer/briefs/<str:brief_id>/claim", designer_claim_page, name="designer-web-claim"),
-    path("designer/briefs/<str:brief_id>", designer_brief_detail_page, name="designer-web-brief-detail"),
     path(
         "designer/briefs/<str:brief_id>/update",
         designer_brief_update_page,
         name="designer-web-brief-update",
     ),
+    path("designer/briefs/<str:brief_id>", designer_brief_detail_page, name="designer-web-brief-detail"),
 ]

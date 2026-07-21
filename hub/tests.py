@@ -422,6 +422,34 @@ class DesignerBootstrapPortalTests(TestCase):
         self.assertEqual(self.brief.final_model_url, "https://files.example/final-model.stl")
         self.assertIn("screen-2.png", self.brief.final_screenshots_urls)
 
+    def test_done_status_with_uploaded_files(self):
+        self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            self.client.post("/designer/briefs/brief-web-portal/claim", {"eta": "3 дня"})
+
+        with patch("hub.services.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            update = self.client.post(
+                "/designer/briefs/brief-web-portal/update",
+                {
+                    "status": HubBrief.Status.DONE,
+                    "designer_comment": "Готово через загрузку файлов.",
+                    "final_model_url": "",
+                    "final_screenshots_urls": "",
+                    "final_model_file": SimpleUploadedFile("final.stl", b"solid final"),
+                    "final_screenshots_archive": SimpleUploadedFile("shots.zip", b"PK\x03\x04"),
+                },
+            )
+        self.assertEqual(update.status_code, 302)
+        self.brief.refresh_from_db()
+        self.assertEqual(self.brief.status, HubBrief.Status.DONE)
+        self.assertTrue(bool(self.brief.final_model_file))
+        self.assertTrue(bool(self.brief.final_screenshots_archive))
+        self.assertGreaterEqual(mock_post.call_count, 1)
+        last_payload = json.loads(mock_post.call_args.kwargs["data"].decode("utf-8"))
+        self.assertEqual(last_payload["event"], "done")
+
     def test_done_status_requires_artifacts(self):
         self.client.post("/designer/login", {"login": "pavel", "password": "pass-pavel"})
         with patch("hub.services.requests.post") as mock_post:

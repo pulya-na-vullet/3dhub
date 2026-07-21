@@ -99,7 +99,11 @@
               Заявка назначена другому дизайнеру. Вы можете только просматривать данные.
             </div>
           {% else %}
-            <form method="post" action="{% url 'designer-web-brief-update' brief.public_id %}">
+            <form
+              method="post"
+              action="{% url 'designer-web-brief-update' brief.public_id %}"
+              enctype="multipart/form-data"
+            >
               {% csrf_token %}
               <div class="mb-3">
                 <label for="status" class="form-label">Новый статус</label>
@@ -114,9 +118,19 @@
                 <textarea class="form-control" id="designer_comment" name="designer_comment" rows="4">{{ brief.designer_comment }}</textarea>
               </div>
               <div class="mb-3">
-                <label for="final_model_url" class="form-label">Ссылка на финальный файл</label>
+                <label for="final_model_file" class="form-label">Финальный файл (загрузка)</label>
+                <input type="file" class="form-control" id="final_model_file" name="final_model_file" />
+                {% if brief.final_model_file %}
+                  <div class="form-text">
+                    Уже загружен:
+                    <a href="{{ brief.final_model_file.url }}" target="_blank" rel="noopener">скачать</a>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="mb-3">
+                <label for="final_model_url" class="form-label">Или ссылка на финальный файл</label>
                 <input
-                  type="url"
+                  type="text"
                   class="form-control"
                   id="final_model_url"
                   name="final_model_url"
@@ -125,18 +139,28 @@
                 />
               </div>
               <div class="mb-3">
-                <label for="final_screenshots_urls" class="form-label">Ссылки на фото/скриншоты (по одной в строке)</label>
+                <label for="final_screenshots_archive" class="form-label">Фото/скриншоты (файл или архив)</label>
+                <input type="file" class="form-control" id="final_screenshots_archive" name="final_screenshots_archive" />
+                {% if brief.final_screenshots_archive %}
+                  <div class="form-text">
+                    Уже загружено:
+                    <a href="{{ brief.final_screenshots_archive.url }}" target="_blank" rel="noopener">скачать</a>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="mb-3">
+                <label for="final_screenshots_urls" class="form-label">Или ссылки на фото/скриншоты (по одной в строке)</label>
                 <textarea
                   class="form-control"
                   id="final_screenshots_urls"
                   name="final_screenshots_urls"
                   rows="4"
-                  placeholder="https://...\nhttps://..."
+                  placeholder="https://...&#10;https://..."
                 >{{ brief.final_screenshots_urls }}</textarea>
               </div>
               <button type="submit" class="btn btn-primary w-100">Сохранить изменения</button>
               <div class="form-text mt-2">
-                Для статуса «Готово» обязательны финальный файл и хотя бы одна ссылка на фото/скриншот.
+                Для статуса «Готово» нужен финальный файл (загрузка или ссылка) и фото/скриншоты (загрузка или ссылки).
               </div>
             </form>
           {% endif %}

@@ -64,16 +64,27 @@ def _update_brief_work_state(
     designer_comment: str,
     final_model_url: str,
     final_screenshots_urls: str,
+    final_model_file=None,
+    final_screenshots_archive=None,
 ):
     if brief.designer_id != designer.id:
         return "Изменять заявку может только назначенный дизайнер."
     if status_value not in DESIGNER_WORK_STATUS_CHOICES:
         return "Выбран недопустимый статус."
+
+    if final_model_file:
+        brief.final_model_file = final_model_file
+    if final_screenshots_archive:
+        brief.final_screenshots_archive = final_screenshots_archive
+
+    has_final_model = bool(final_model_url) or bool(brief.final_model_file)
+    has_final_photos = bool(final_screenshots_urls.strip()) or bool(brief.final_screenshots_archive)
+
     if status_value == HubBrief.Status.DONE:
-        if not final_model_url:
-            return "Для статуса 'Готово' укажите ссылку на финальный файл."
-        if not final_screenshots_urls:
-            return "Для статуса 'Готово' добавьте хотя бы одну ссылку на фото/скриншот."
+        if not has_final_model:
+            return "Для статуса «Готово» приложите финальный файл или укажите ссылку на него."
+        if not has_final_photos:
+            return "Для статуса «Готово» приложите фото/скриншоты или укажите ссылки на них."
 
     brief.status = status_value
     brief.designer_comment = designer_comment
@@ -81,16 +92,7 @@ def _update_brief_work_state(
     brief.final_screenshots_urls = final_screenshots_urls
     if status_value == HubBrief.Status.DONE:
         brief.done_at = timezone.now()
-    brief.save(
-        update_fields=[
-            "status",
-            "designer_comment",
-            "final_model_url",
-            "final_screenshots_urls",
-            "done_at",
-            "updated_at",
-        ]
-    )
+    brief.save()
     event_map = {
         HubBrief.Status.ASSIGNED: "assigned",
         HubBrief.Status.IN_PROGRESS: "in_progress",
@@ -410,11 +412,13 @@ def designer_brief_update_page(request: HttpRequest, brief_id: str) -> HttpRespo
         designer_comment=request.POST.get("designer_comment", "").strip(),
         final_model_url=request.POST.get("final_model_url", "").strip(),
         final_screenshots_urls=request.POST.get("final_screenshots_urls", "").strip(),
+        final_model_file=request.FILES.get("final_model_file"),
+        final_screenshots_archive=request.FILES.get("final_screenshots_archive"),
     )
     if error:
         messages.error(request, error)
     else:
-        messages.success(request, "Заявка обновлена.")
+        messages.success(request, "Заявка обновлена. Статус отправлен в CRM.")
     return redirect("designer-web-brief-detail", brief_id=brief_id)
 
 
