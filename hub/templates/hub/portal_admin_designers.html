@@ -1,0 +1,82 @@
+{% extends "hub/base.html" %}
+{% block title %}УЗ дизайнеров — HUB Admin{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Учётные записи дизайнеров</h1>
+    <p class="text-muted mb-0">Выдача УЗ, сброс пароля, временная деактивация, удаление.</p>
+  </div>
+  <div class="btn-group">
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-dashboard' %}">Рейтинг</a>
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-designers' %}">УЗ дизайнеров</a>
+    <a class="btn btn-outline-dark btn-sm" href="{% url 'portal-admin-briefs' %}">Заказы</a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'portal-admin-logout' %}">Выйти</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="border rounded bg-white p-3">
+      <h2 class="h5">Выдать УЗ</h2>
+      <form method="post" action="{% url 'portal-admin-designer-create' %}">
+        {% csrf_token %}
+        <div class="mb-2">
+          <label class="form-label">ФИО</label>
+          <input type="text" name="full_name" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Логин</label>
+          <input type="text" name="web_login" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Пароль (опц.)</label>
+          <input type="text" name="password" class="form-control" placeholder="сгенерируется, если пусто">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Телефон СБП (опц.)</label>
+          <input type="text" name="sbp_phone" class="form-control">
+        </div>
+        <button class="btn btn-dark w-100" type="submit">Создать УЗ</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="table-responsive bg-white border rounded">
+      <table class="table table-sm mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Имя</th>
+            <th>Логин</th>
+            <th>Рейтинг</th>
+            <th>Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in designers %}
+          <tr>
+            <td>{{ d.full_name }}</td>
+            <td><code>{{ d.web_login }}</code></td>
+            <td>{% if d.ratings_count %}{{ d.avg_rating }} ({{ d.ratings_count }}){% else %}—{% endif %}</td>
+            <td>{% if d.is_active %}<span class="badge text-bg-success">on</span>{% else %}<span class="badge text-bg-secondary">off</span>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              <form method="post" action="{% url 'portal-admin-designer-toggle' d.id %}" class="d-inline">{% csrf_token %}
+                <button class="btn btn-sm btn-outline-secondary" type="submit">{% if d.is_active %}Деактивировать{% else %}Активировать{% endif %}</button>
+              </form>
+              <form method="post" action="{% url 'portal-admin-designer-reset' d.id %}" class="d-inline">{% csrf_token %}
+                <button class="btn btn-sm btn-outline-primary" type="submit">Сброс пароля</button>
+              </form>
+              <form method="post" action="{% url 'portal-admin-designer-delete' d.id %}" class="d-inline" onsubmit="return confirm('Удалить дизайнера {{ d.full_name }}?');">{% csrf_token %}
+                <button class="btn btn-sm btn-outline-danger" type="submit">Удалить</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-muted p-3">Нет дизайнеров.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

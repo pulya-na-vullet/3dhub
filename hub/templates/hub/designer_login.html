@@ -1,0 +1,37 @@
+{% extends "hub/base.html" %}
+
+{% block title %}Вход дизайнера{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+      <div class="card shadow-sm">
+        <div class="card-body p-4">
+          <h1 class="h4 mb-3">Вход в кабинет дизайнера</h1>
+          <p class="text-muted">
+            Используйте логин и пароль, которые бот выдал после регистрации.
+          </p>
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="login" class="form-label">Логин</label>
+              <input
+                type="text"
+                name="login"
+                id="login"
+                class="form-control"
+                value="{{ login_value|default:'' }}"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label for="password" class="form-label">Пароль</label>
+              <input type="password" name="password" id="password" class="form-control" required />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Войти</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
