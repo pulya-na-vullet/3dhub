@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kafka-signing-docs",
+  "title": "UMP SigningDocs message from system",
+  "type": "object",
+  "required": ["applicationId", "correlationKey", "messageName", "variables"],
+  "additionalProperties": true,
+  "properties": {
+    "applicationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationKey": {
+      "type": "string",
+      "pattern": "^.+\\.NON_CREDIT_INSURANCE$"
+    },
+    "messageName": {
+      "type": "string",
+      "const": "SigningDocs"
+    },
+    "variables": {
+      "type": "object",
+      "required": ["agreementLink"],
+      "properties": {
+        "agreementLink": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

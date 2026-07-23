@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cms-links-response",
+  "title": "CMS Links Response",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["documentType", "documentId", "resultCode"],
+    "additionalProperties": true,
+    "properties": {
+      "documentType": {
+        "type": "string"
+      },
+      "documentId": {
+        "type": "string"
+      },
+      "resultCode": {
+        "type": "integer"
+      },
+      "errorMessage": {
+        "type": "string"
+      }
+    }
+  }
+}

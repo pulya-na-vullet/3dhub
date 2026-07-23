@@ -1,0 +1,25 @@
+{
+  "topic": "ump.process.from.system",
+  "records": [
+    {
+      "key": null,
+      "partition": 0,
+      "value": {
+        "messageName": "CLM_UPDATE_STATUS",
+        "rawMessage": "<xml/>"
+      }
+    },
+    {
+      "key": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "partition": 1,
+      "value": {
+        "applicationId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "correlationKey": "3fa85f64-5717-4562-b3fc-2c963f66afa6.NON_CREDIT_INSURANCE",
+        "messageName": "SigningDocs",
+        "variables": {
+          "agreementLink": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        }
+      }
+    }
+  ]
+}

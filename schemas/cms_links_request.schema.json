@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cms-links-request",
+  "title": "CMS Links Request",
+  "type": "object",
+  "required": ["userId", "systemName", "documents"],
+  "additionalProperties": false,
+  "properties": {
+    "userId": {
+      "type": "string",
+      "description": "Идентификатор пользователя",
+      "minLength": 1
+    },
+    "systemName": {
+      "type": "string",
+      "description": "Название системы, инициировавшей действие",
+      "minLength": 1
+    },
+    "documents": {
+      "type": "array",
+      "description": "Список документов",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["documentType", "documentId"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Ссылка на документ. При сохранении через AlfaCapture2 не передается"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "Идентификатор элемента документа. При сохранении через AlfaCapture2 не передается"
+          },
+          "documentType": {
+            "type": "string",
+            "description": "Тип документа"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "Внешний идентификатор документа"
+          },
+          "signs": {
+            "type": "array",
+            "description": "Список подписей, связанных с документом",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string" },
+                "itemId": { "type": "string" },
+                "createdDate": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "alfaCaptureDocId": {
+            "type": "string",
+            "description": "UUID документа из AlfaCapture2. При сохранении через старый ЭА не передается"
+          },
+          "alfaCaptureFiles": {
+            "type": "array",
+            "description": "Список вложений AlfaCapture2. При сохранении через старый ЭА не передается",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fileId": { "type": "string" },
+                "fileName": { "type": "string" },
+                "contentName": { "type": "string" },
+                "fileType": {
+                  "type": "string",
+                  "enum": ["DOCUMENT", "SIGNATURE"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
